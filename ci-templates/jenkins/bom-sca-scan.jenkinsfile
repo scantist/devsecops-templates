@@ -1,0 +1,128 @@
+// SCA Scan - Jenkins Pipeline Template
+// =====================================
+//
+// Simple, modular SCA (Software Composition Analysis) scanning pipeline
+// Uses sca-bom-detect.jar to scan dependencies for vulnerabilities
+//
+// USAGE:
+// ------
+// 1. Create a new Jenkins Pipeline job
+// 2. Point to this Jenkinsfile in your repository
+// 3. Configure the required environment variables:
+//    - SCA_BOM_DETECT_DOWNLOAD_URL
+//    - DEVSECOPS_TOKEN
+//    - DEVSECOPS_IMPORT_URL (optional)
+//    - ASYNC (optional, defaults to false)
+//
+// 4. Run the pipeline to perform SCA scanning
+
+pipeline {
+    agent {
+        // Use Ubuntu-based agent similar to GitLab CI
+        label 'ubuntu'
+    }
+    
+    // Environment variables - equivalent to GitLab CI variables
+    environment {
+        SCA_BOM_DETECT_JAR = "sca-bom-detect.jar"
+        SCA_BOM_DETECT_DOWNLOAD_URL = "${env.SCA_BOM_DETECT_DOWNLOAD_URL}"
+        DEVSECOPS_TOKEN = "${env.DEVSECOPS_TOKEN}"
+        DEVSECOPS_IMPORT_URL = "${env.DEVSECOPS_IMPORT_URL}"
+        ASYNC = "${env.ASYNC ?: 'false'}" // defaults to false if not set
+        
+        // Job-specific variables
+        SCA_JAR_NAME = "sca-bom-detect.jar"
+        SCA_PLUGIN_DIR = ".scantist"
+        SCA_REPORT_DIR = "devsecops_report"
+    }
+    
+    stages {
+        stage('Setup Dependencies') {
+            steps {
+                script {
+                    echo "📦 Installing required dependencies..."
+                    
+                    // Install dependencies similar to GitLab CI before_script
+                    sh '''
+                        apt-get update
+                        apt-get install -y curl openjdk-11-jre-headless
+                    '''
+                    
+                    echo "✅ Dependencies installed successfully"
+                }
+            }
+        }
+        
+        stage('SCA Scan') {
+            steps {
+                script {
+                    echo "🔍 Starting Scantist SCA scan..."
+                    
+                    // Execute the main SCA scanning logic
+                    sh '''
+                        # Validate DevSecOps token is provided
+                        if [[ -z "${DEVSECOPS_TOKEN:-}" ]]; then
+                            echo "[SCA ERROR] DEVSECOPS_TOKEN environment variable is required" >&2
+                            exit 1
+                        fi
+                        
+                        # Download SCA detector if not exists
+                        if [[ ! -f "${SCA_PLUGIN_DIR}/${SCA_JAR_NAME}" ]]; then
+                            echo "[SCA] Downloading SCA detector..."
+                            mkdir -p "${SCA_PLUGIN_DIR}"
+                            curl -L -o "${SCA_PLUGIN_DIR}/${SCA_JAR_NAME}" "${SCA_BOM_DETECT_DOWNLOAD_URL}"
+                            echo "[SCA] Download completed"
+                        fi
+                        
+                        # Create report directory
+                        mkdir -p "${SCA_REPORT_DIR}"
+                        
+                        # Run SCA scan with DevSecOps integration
+                        echo "[SCA] Starting scan on: ${WORKSPACE}"
+                        echo "[SCA] DevSecOps integration enabled"
+                        
+                        env DEVSECOPS_TOKEN="${DEVSECOPS_TOKEN}" \\
+                            ${DEVSECOPS_IMPORT_URL:+DEVSECOPS_IMPORT_URL="${DEVSECOPS_IMPORT_URL}"} \\
+                            java -jar "${SCA_PLUGIN_DIR}/${SCA_JAR_NAME}" -f "${WORKSPACE}" --debug -report json
+                        
+                        echo "[SCA] Scan completed. Reports in: ${SCA_REPORT_DIR}"
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            // Archive artifacts similar to GitLab CI artifacts
+            script {
+                echo "📁 Archiving SCA scan reports..."
+                
+                // Archive the reports directory
+                archiveArtifacts artifacts: "${SCA_REPORT_DIR}/**/*", 
+                                allowEmptyArchive: true,
+                                fingerprint: true
+                
+                // Publish test results if JSON reports exist
+                if (fileExists("${SCA_REPORT_DIR}/*.json")) {
+                    echo "📊 Publishing SCA scan results..."
+                    // Note: You may need to install additional Jenkins plugins
+                    // for security scanning result visualization
+                }
+            }
+        }
+        
+        success {
+            echo "✅ SCA scan completed successfully!"
+        }
+        
+        failure {
+            echo "❌ SCA scan failed. Check the logs for details."
+        }
+        
+        cleanup {
+            // Clean up workspace if needed
+            echo "🧹 Cleaning up workspace..."
+        }
+    }
+}

@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SCA Scan - TeamCity Build Configuration Template (XML)
+  ======================================================
+  
+  Simple, modular SCA (Software Composition Analysis) scanning build configuration
+  Uses sca-bom-detect.jar to scan dependencies for vulnerabilities
+  
+  USAGE:
+  ------
+  1. Import this XML configuration in TeamCity Administration
+  2. Configure the required parameters in build configuration settings:
+     - SCA_BOM_DETECT_DOWNLOAD_URL
+     - DEVSECOPS_TOKEN
+     - DEVSECOPS_IMPORT_URL (optional)
+     - ASYNC (optional, defaults to false)
+  3. Run the build to perform SCA scanning
+-->
+
+<build-type xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+           xsi:noNamespaceSchemaLocation="https://www.jetbrains.com/teamcity/schemas/2023.11/project-config.xsd">
+  
+  <name>SCA Security Scan</name>
+  <description>Software Composition Analysis scanning using sca-bom-detect.jar</description>
+  
+  <!-- Build steps -->
+  <build-runners>
+    <!-- Step 1: Setup Dependencies -->
+    <runner id="setup_dependencies" name="Setup Dependencies" type="simpleRunner">
+      <parameters>
+        <param name="script.content"><![CDATA[
+echo "📦 Installing required dependencies..."
+apt-get update
+apt-get install -y curl openjdk-11-jre-headless
+echo "✅ Dependencies installed successfully"
+        ]]></param>
+        <param name="teamcity.step.mode">default</param>
+        <param name="use.custom.script">true</param>
+        <param name="docker.image.name">ubuntu:latest</param>
+        <param name="docker.image.platform">linux</param>
+      </parameters>
+    </runner>
+    
+    <!-- Step 2: SCA Scan -->
+    <runner id="sca_scan" name="SCA Security Scan" type="simpleRunner">
+      <parameters>
+        <param name="script.content"><![CDATA[
+echo "🔍 Starting Scantist SCA scan..."
+
+# Validate DevSecOps token is provided
+if [[ -z "${DEVSECOPS_TOKEN:-}" ]]; then
+    echo "[SCA ERROR] DEVSECOPS_TOKEN environment variable is required" >&2
+    exit 1
+fi
+
+# Download SCA detector if not exists
+if [[ ! -f "${SCA_PLUGIN_DIR}/${SCA_JAR_NAME}" ]]; then
+    echo "[SCA] Downloading SCA detector..."
+    mkdir -p "${SCA_PLUGIN_DIR}"
+    curl -L -o "${SCA_PLUGIN_DIR}/${SCA_JAR_NAME}" "${SCA_BOM_DETECT_DOWNLOAD_URL}"
+    echo "[SCA] Download completed"
+fi
+
+# Create report directory
+mkdir -p "${SCA_REPORT_DIR}"
+
+# Run SCA scan with DevSecOps integration
+echo "[SCA] Starting scan on: $(pwd)"
+echo "[SCA] DevSecOps integration enabled"
+
+env DEVSECOPS_TOKEN="${DEVSECOPS_TOKEN}" \
+    ${DEVSECOPS_IMPORT_URL:+DEVSECOPS_IMPORT_URL="${DEVSECOPS_IMPORT_URL}"} \
+    java -jar "${SCA_PLUGIN_DIR}/${SCA_JAR_NAME}" -f "$(pwd)" --debug -report json
+
+echo "[SCA] Scan completed. Reports in: ${SCA_REPORT_DIR}"
+        ]]></param>
+        <param name="teamcity.step.mode">default</param>
+        <param name="use.custom.script">true</param>
+        <param name="docker.image.name">ubuntu:latest</param>
+        <param name="docker.image.platform">linux</param>
+      </parameters>
+    </runner>
+  </build-runners>
+  
+  <!-- Build triggers -->
+  <build-triggers>
+    <build-trigger id="vcsTrigger" type="vcsTrigger">
+      <parameters>
+        <param name="branchFilter">+:*</param>
+        <param name="enableQueueOptimization">true</param>
+        <param name="quietPeriodMode">DO_NOT_USE</param>
+      </parameters>
+    </build-trigger>
+  </build-triggers>
+  
+  <!-- Build parameters -->
+  <parameters>
+    <!-- Build configuration parameters -->
+    <param name="SCA_BOM_DETECT_JAR" value="sca-bom-detect.jar" />
+    <param name="SCA_JAR_NAME" value="sca-bom-detect.jar" />
+    <param name="SCA_PLUGIN_DIR" value=".scantist" />
+    <param name="SCA_REPORT_DIR" value="devsecops_report" />
+    <param name="ASYNC" value="false" />
+    
+    <!-- Environment parameters (configure these in TeamCity UI) -->
+    <param name="env.SCA_BOM_DETECT_DOWNLOAD_URL" value="" />
+    <param name="env.DEVSECOPS_TOKEN" value="" spec="password display='hidden'" />
+    <param name="env.DEVSECOPS_IMPORT_URL" value="" />
+  </parameters>
+  
+  <!-- Artifact rules - equivalent to GitLab CI artifacts -->
+  <artifact-rules>
+    <rule>
+      <include-rules>%SCA_REPORT_DIR%/** =&gt; sca-reports.zip</include-rules>
+    </rule>
+    <rule>
+      <include-rules>%SCA_REPORT_DIR%/*.json =&gt; sca-reports-json.zip</include-rules>
+    </rule>
+  </artifact-rules>
+  
+  <!-- Build features -->
+  <build-features>
+    <!-- XML report processing -->
+    <build-feature id="xml-report-plugin" type="xml-report-plugin">
+      <parameters>
+        <param name="xmlReportParsing.reportType">findBugs</param>
+        <param name="xmlReportParsing.reportDirs">%SCA_REPORT_DIR%/*.xml</param>
+      </parameters>
+    </build-feature>
+    
+    <!-- Build status publisher -->
+    <build-feature id="commit-status-publisher" type="commit-status-publisher">
+      <parameters>
+        <param name="github_authentication_type">token</param>
+        <param name="github_host">https://api.github.com</param>
+        <param name="publisherId">githubStatusPublisher</param>
+        <param name="secure:github_access_token"></param>
+      </parameters>
+    </build-feature>
+  </build-features>
+  
+  <!-- Agent requirements -->
+  <agent-requirements>
+    <agent-requirement id="RQ_1" type="contains">
+      <parameters>
+        <param name="property-name">teamcity.agent.jvm.os.name</param>
+        <param name="property-value">Linux</param>
+      </parameters>
+    </agent-requirement>
+  </agent-requirements>
+  
+  <!-- Failure conditions -->
+  <build-failure-conditions>
+    <failure-condition id="BUILD_EXT_1" type="BuildFailureOnMetric">
+      <parameters>
+        <param name="metric.type">BuildDuration</param>
+        <param name="metric.threshold">1800</param>
+        <param name="metric.units">seconds</param>
+        <param name="failure.metric.type">more</param>
+      </parameters>
+    </failure-condition>
+  </build-failure-conditions>
+  
+  <!-- VCS settings -->
+  <vcs-settings>
+    <vcs-entry-ref root-id="PROJECT_EXT_ROOT" />
+  </vcs-settings>
+  
+  <!-- Build options -->
+  <options>
+    <option name="artifactRules" value="%SCA_REPORT_DIR%/**" />
+    <option name="publishArtifacts" value="SUCCESSFUL" />
+    <option name="cleanBuild" value="false" />
+    <option name="enableHangingBuildsDetection" value="true" />
+    <option name="executionTimeoutMin" value="30" />
+  </options>
+  
+</build-type>
