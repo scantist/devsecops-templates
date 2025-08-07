@@ -1,0 +1,212 @@
+version: 2.1
+
+description: >
+  SCA (Software Composition Analysis) scanning orb for CircleCI.
+  Provides reusable commands, jobs, and executors for dependency vulnerability scanning
+  with DevSecOps integration.
+
+display:
+  home_url: "https://github.com/scantist/devsecops-templates"
+  source_url: "https://github.com/scantist/devsecops-templates"
+
+orbs: {}
+
+executors:
+  ubuntu-executor:
+    description: "Ubuntu-based executor with Java runtime for SCA scanning"
+    docker:
+      - image: ubuntu:latest
+    working_directory: ~/project
+    resource_class: medium
+
+commands:
+  setup-dependencies:
+    description: "Install required dependencies for SCA scanning"
+    steps:
+      - run:
+          name: "📦 Installing required dependencies"
+          command: |
+            echo "📦 Installing required dependencies..."
+            apt-get update
+            apt-get install -y curl openjdk-11-jre-headless
+            echo "✅ Dependencies installed successfully"
+
+  validate-environment:
+    description: "Validate required environment variables"
+    parameters:
+      devsecops-token-var:
+        type: string
+        default: "DEVSECOPS_TOKEN"
+        description: "Name of environment variable containing DevSecOps token"
+    steps:
+      - run:
+          name: "🔍 Validating environment variables"
+          command: |
+            if [[ -z "${<< parameters.devsecops-token-var >>:-}" ]]; then
+              echo "[SCA ERROR] << parameters.devsecops-token-var >> environment variable is required" >&2
+              exit 1
+            fi
+            echo "✅ Environment validation passed"
+
+  download-sca-detector:
+    description: "Download SCA detector JAR if not exists"
+    parameters:
+      sca-bom-detect-download-url:
+        type: string
+        default: "https://download.scantist.io/sca-bom-detect.jar"
+        description: "URL to download SCA detector JAR"
+      jar-name:
+        type: string
+        default: "sca-bom-detect.jar"
+        description: "Name of the SCA detector JAR file"
+      plugin-dir:
+        type: string
+        default: ".scantist"
+        description: "Directory to store the SCA detector"
+    steps:
+      - run:
+          name: "📥 Downloading SCA detector"
+          command: |
+            SCA_JAR_NAME="<< parameters.jar-name >>"
+            SCA_PLUGIN_DIR="<< parameters.plugin-dir >>"
+            
+            if [[ ! -f "${SCA_PLUGIN_DIR}/${SCA_JAR_NAME}" ]]; then
+              echo "[SCA] Downloading SCA detector..."
+              mkdir -p "${SCA_PLUGIN_DIR}"
+              curl -L -o "${SCA_PLUGIN_DIR}/${SCA_JAR_NAME}" "<< parameters.sca-bom-detect-download-url >>"
+              echo "[SCA] Download completed"
+            else
+              echo "[SCA] SCA detector already exists, skipping download"
+            fi
+
+  run-sca-scan:
+    description: "Execute SCA scan with DevSecOps integration"
+    parameters:
+      jar-name:
+        type: string
+        default: "sca-bom-detect.jar"
+        description: "Name of the SCA detector JAR file"
+      plugin-dir:
+        type: string
+        default: ".scantist"
+        description: "Directory containing the SCA detector"
+      report-dir:
+        type: string
+        default: "devsecops_report"
+        description: "Directory to store scan reports"
+      devsecops-token-var:
+        type: string
+        default: "DEVSECOPS_TOKEN"
+        description: "Name of environment variable containing DevSecOps token"
+      import-url-var:
+        type: string
+        default: "DEVSECOPS_IMPORT_URL"
+        description: "Name of environment variable containing DevSecOps import URL (optional)"
+      scan-path:
+        type: string
+        default: "."
+        description: "Path to scan (relative to working directory)"
+    steps:
+      - run:
+          name: "🔍 Running SCA scan"
+          command: |
+            SCA_JAR_NAME="<< parameters.jar-name >>"
+            SCA_PLUGIN_DIR="<< parameters.plugin-dir >>"
+            SCA_REPORT_DIR="<< parameters.report-dir >>"
+            SCAN_PATH="<< parameters.scan-path >>"
+            
+            echo "🔍 Starting SCA scan..."
+            
+            # Create report directory
+            mkdir -p "${SCA_REPORT_DIR}"
+            
+            # Run SCA scan with DevSecOps integration
+            echo "[SCA] Starting scan on: $(pwd)/${SCAN_PATH}"
+            echo "[SCA] DevSecOps integration enabled"
+            
+            # Run SCA scan with simplified command
+            java -jar "${SCA_PLUGIN_DIR}/${SCA_JAR_NAME}" -f "$(pwd)/${SCAN_PATH}" --debug -report json
+            
+            echo "[SCA] Scan completed. Reports in: ${SCA_REPORT_DIR}"
+
+jobs:
+  sca-scan:
+    description: "Complete SCA scan job with artifact storage"
+    executor: ubuntu-executor
+    parameters:
+      devsecops-token-var:
+        type: string
+        default: "DEVSECOPS_TOKEN"
+        description: "Name of environment variable containing DevSecOps token"
+      sca-bom-detect-download-url:
+        type: string
+        default: "https://download.scantist.io/sca-bom-detect.jar"
+        description: "URL to download SCA detector JAR"
+      import-url-var:
+        type: string
+        default: "DEVSECOPS_IMPORT_URL"
+        description: "Name of environment variable containing DevSecOps import URL (optional)"
+      jar-name:
+        type: string
+        default: "sca-bom-detect.jar"
+        description: "Name of the SCA detector JAR file"
+      plugin-dir:
+        type: string
+        default: ".scantist"
+        description: "Directory to store the SCA detector"
+      report-dir:
+        type: string
+        default: "devsecops_report"
+        description: "Directory to store scan reports"
+      scan-path:
+        type: string
+        default: "."
+        description: "Path to scan (relative to working directory)"
+      store-artifacts:
+        type: boolean
+        default: true
+        description: "Whether to store scan reports as CircleCI artifacts"
+      store-test-results:
+        type: boolean
+        default: true
+        description: "Whether to store scan results for CircleCI dashboard"
+    environment:
+      SCA_BOM_DETECT_JAR: "<< parameters.jar-name >>"
+      SCA_JAR_NAME: "<< parameters.jar-name >>"
+      SCA_PLUGIN_DIR: "<< parameters.plugin-dir >>"
+      SCA_REPORT_DIR: "<< parameters.report-dir >>"
+      ASYNC: "false"
+    steps:
+      - checkout
+      
+      # Setup phase
+      - setup-dependencies
+      - validate-environment:
+          devsecops-token-var: "<< parameters.devsecops-token-var >>"
+      
+      # Main scanning phase
+      - download-sca-detector:
+          sca-bom-detect-download-url: "<< parameters.sca-bom-detect-download-url >>"
+          jar-name: "<< parameters.jar-name >>"
+          plugin-dir: "<< parameters.plugin-dir >>"
+      - run-sca-scan:
+          jar-name: "<< parameters.jar-name >>"
+          plugin-dir: "<< parameters.plugin-dir >>"
+          report-dir: "<< parameters.report-dir >>"
+          devsecops-token-var: "<< parameters.devsecops-token-var >>"
+          import-url-var: "<< parameters.import-url-var >>"
+          scan-path: "<< parameters.scan-path >>"
+      
+      # Store artifacts and results
+      - when:
+          condition: << parameters.store-artifacts >>
+          steps:
+            - store_artifacts:
+                path: << parameters.report-dir >>
+                destination: sca-reports
+      
+      - when:
+          condition: << parameters.store-test-results >>
+          steps:
+            - store_test_results:
+                path: << parameters.report-dir >>
