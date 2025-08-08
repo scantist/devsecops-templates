@@ -1,0 +1,74 @@
+# SCA Scan - TeamCity Template
+# =====================================
+#
+# Simple, modular SCA (Software Composition Analysis) scanning template
+# Uses sca-bom-detect.jar to scan dependencies for vulnerabilities
+#
+# USAGE:
+# ------
+# 1. Place this file in your project's .teamcity/ directory
+# 2. Configure the required parameters in TeamCity project settings:
+#    - SCA_BOM_DETECT_DOWNLOAD_URL
+#    - DEVSECOPS_TOKEN
+#    - DEVSECOPS_IMPORT_URL (optional)
+#    - ASYNC (optional, defaults to false)
+
+name: DevSecOps SCA Scan
+
+jobs:
+  bom-sca-scan:
+    runs-on: Linux-Medium
+    
+    env:
+      SCA_BOM_DETECT_JAR: "sca-bom-detect.jar"
+      SCA_JAR_NAME: "sca-bom-detect.jar"
+      SCA_PLUGIN_DIR: ".scantist"
+      SCA_REPORT_DIR: "devsecops_report"
+      ASYNC: "%ASYNC%"
+    
+    steps:
+      - type: script
+        name: Install Dependencies
+        script-content: |
+          echo "📦 Installing required dependencies..."
+          apt-get update
+          apt-get install -y curl openjdk-11-jre-headless
+          echo "✅ Dependencies installed successfully"
+        docker-image: ubuntu:latest
+      
+      - type: script
+        name: Run SCA Scan
+        script-content: |
+          echo "🔍 Starting Scantist SCA scan..."
+          
+          # Validate DevSecOps token is provided
+          if [[ -z "%DEVSECOPS_TOKEN%" ]]; then
+            echo "[SCA ERROR] DEVSECOPS_TOKEN environment variable is required" >&2
+            exit 1
+          fi
+          
+          # Download SCA detector if not exists
+          if [[ ! -f "${SCA_PLUGIN_DIR}/${SCA_JAR_NAME}" ]]; then
+            echo "[SCA] Downloading SCA detector..."
+            mkdir -p "${SCA_PLUGIN_DIR}"
+            curl -L -o "${SCA_PLUGIN_DIR}/${SCA_JAR_NAME}" "%SCA_BOM_DETECT_DOWNLOAD_URL%"
+            echo "[SCA] Download completed"
+          fi
+          
+          # Create report directory
+          mkdir -p "${SCA_REPORT_DIR}"
+          
+          # Run SCA scan with DevSecOps integration
+          echo "[SCA] Starting scan on: %teamcity.build.checkoutDir%"
+          echo "[SCA] DevSecOps integration enabled"
+          
+          env DEVSECOPS_TOKEN="%DEVSECOPS_TOKEN%" \
+              DEVSECOPS_IMPORT_URL="%DEVSECOPS_IMPORT_URL%" \
+              java -jar "${SCA_PLUGIN_DIR}/${SCA_JAR_NAME}" -f "%teamcity.build.checkoutDir%" --debug -report json
+          
+          echo "[SCA] Scan completed. Reports in: ${SCA_REPORT_DIR}"
+        docker-image: ubuntu:latest
+    
+    artifacts:
+      paths:
+        - "%SCA_REPORT_DIR%/**" => sca-reports.zip

@@ -4,201 +4,94 @@ This directory contains Jenkins pipeline templates for integrating Scantist secu
 
 ## Available Templates
 
-### `bom-sca-scan.jenkinsfile`
-A comprehensive Jenkins pipeline template for Software Composition Analysis (SCA) scanning using `sca-bom-detect.jar`.
+### `scaScan.groovy`
+A reusable Jenkins Pipeline step for Software Composition Analysis (SCA) scanning using `sca-bom-detect.jar`.  
+All required configuration values are securely loaded from Jenkins **Credentials**.
+
+---
 
 ## Quick Start
 
 ### Prerequisites
 
-1. **Jenkins Setup**:
-   - Jenkins server with Pipeline plugin installed
-   - Ubuntu-based Jenkins agent (or modify the `agent` section for your setup)
-   - Required permissions to install system packages (`apt-get`)
+1. **Jenkins Setup**
+   - Jenkins server with **Pipeline** plugin installed
+   - Ubuntu-based Jenkins agent (or modify commands for your OS)
+   - Access to install packages (`apt-get`) if dependencies aren’t pre-installed
+   - Internet access to download the `sca-bom-detect.jar` file
 
-2. **Environment Variables**:
-   Configure these in your Jenkins job or globally:
-   ```
-   SCA_BOM_DETECT_DOWNLOAD_URL=<URL_to_sca-bom-detect.jar>
-   DEVSECOPS_TOKEN=<your_devsecops_token>
-   DEVSECOPS_IMPORT_URL=<optional_import_url>
-   ASYNC=false  # Optional, defaults to false
-   ```
+2. **Jenkins Credentials**  
+   In **Manage Jenkins → Credentials**, create three **Secret text** entries:
 
-### Usage
+   | ID                               | Example Value |
+   |----------------------------------|---------------|
+   | `SCA_BOM_DETECT_DOWNLOAD_URL`    | https://download.scantist.io/sca-bom-detect.jar |
+   | `DEVSECOPS_IMPORT_URL`           | https://my-import-endpoint |
+   | `DEVSECOPS_TOKEN`                | your_api_token |
 
-1. **Create a New Pipeline Job**:
-   - Go to Jenkins → New Item → Pipeline
-   - Name your job (e.g., "SCA-Security-Scan")
+---
 
-2. **Configure Pipeline**:
-   - In the Pipeline section, choose "Pipeline script from SCM"
-   - Point to your repository containing the Jenkinsfile
-   - Set Script Path to: `v1/ci-templates/jenkins/bom-sca-scan.jenkinsfile`
+## Usage
 
-3. **Set Environment Variables**:
-   - Go to job configuration → Build Environment
-   - Add the required environment variables listed above
+### 1. Create or Edit a Pipeline Job
+- Go to **Jenkins → New Item → Pipeline** (or edit an existing job)
+- Choose **Pipeline script** or **Pipeline script from SCM** depending on your setup
 
-4. **Run the Pipeline**:
-   - Click "Build Now" to execute the SCA scan
+### 2. Call the Template in Your Pipeline
+In your `Jenkinsfile`, after your build stage:
 
-## Pipeline Stages
-
-The Jenkins pipeline includes the following stages:
-
-### 1. Setup Dependencies
-- Updates package manager
-- Installs `curl` and `openjdk-11-jre-headless`
-- Prepares the environment for SCA scanning
-
-### 2. SCA Scan
-- Validates required environment variables
-- Downloads the SCA detector JAR if not present
-- Creates report directory
-- Executes the SCA scan with DevSecOps integration
-- Generates JSON reports
-
-### Post-Build Actions
-- **Always**: Archives scan reports as Jenkins artifacts
-- **Success**: Logs successful completion
-- **Failure**: Logs failure details for debugging
-- **Cleanup**: Performs workspace cleanup
-
-## Customization
-
-### Agent Configuration
-Modify the `agent` section to match your Jenkins setup:
-
-```groovy
-agent {
-    // For Docker-based agents
-    docker {
-        image 'ubuntu:latest'
+\`\`\`groovy
+stage('SCA Scan') {
+  steps {
+    script {
+      evaluate(new URL('https://raw.githubusercontent.com/<user>/<repo>/<branch>/scaScan.groovy').text)
+      scaScan() // Runs with all secrets loaded from Jenkins credentials
     }
+  }
 }
+\`\`\`
 
-// Or for specific node labels
-agent {
-    label 'your-custom-label'
-}
-```
+---
 
-### Additional Dependencies
-Add more dependencies in the "Setup Dependencies" stage:
+## What It Does
 
-```groovy
-sh '''
-    apt-get update
-    apt-get install -y curl openjdk-11-jre-headless git maven
-'''
-```
+### Stages Inside `scaScan()`:
+1. **Dependency Setup**  
+   - Installs `curl` and `openjdk-11-jre-headless` if not present (Debian/Ubuntu agents)
+2. **Jar Download**  
+   - Downloads `sca-bom-detect.jar` from the URL in `SCA_BOM_DETECT_DOWNLOAD_URL` if missing
+3. **SCA Scan Execution**  
+   - Runs the scan on the current workspace using `DEVSECOPS_TOKEN` and `DEVSECOPS_IMPORT_URL`
+4. **Report Archiving**  
+   - Archives all generated reports (`devsecops_report/**`) as Jenkins build artifacts
 
-### Custom Report Processing
-Extend the `post` section to process reports:
+---
 
-```groovy
-post {
-    always {
-        // Your custom report processing
-        publishHTML([
-            allowMissing: false,
-            alwaysLinkToLastBuild: true,
-            keepAll: true,
-            reportDir: "${SCA_REPORT_DIR}",
-            reportFiles: '*.json',
-            reportName: 'SCA Security Report'
-        ])
-    }
-}
-```
+## Environment Variables in This Template
+These are **not** passed manually — they are loaded from Jenkins credentials at runtime.
 
-## Environment Variables Reference
+| Jenkins Credential ID              | Purpose |
+|------------------------------------|---------|
+| `SCA_BOM_DETECT_DOWNLOAD_URL`      | URL to download the SCA detector JAR |
+| `DEVSECOPS_IMPORT_URL`             | Optional: Import URL for DevSecOps integration |
+| `DEVSECOPS_TOKEN`                  | Authentication token for DevSecOps platform |
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `SCA_BOM_DETECT_DOWNLOAD_URL` | ✅ | - | URL to download the SCA detector JAR |
-| `DEVSECOPS_TOKEN` | ✅ | - | Authentication token for DevSecOps platform |
-| `DEVSECOPS_IMPORT_URL` | ❌ | - | Optional import URL for DevSecOps integration |
-| `ASYNC` | ❌ | `false` | Enable asynchronous processing |
+---
 
 ## Troubleshooting
 
 ### Common Issues
-
-1. **Permission Denied for apt-get**:
-   - Ensure Jenkins agent runs with sufficient privileges
-   - Consider using Docker agents with pre-installed dependencies
-
-2. **Java Not Found**:
-   - Verify OpenJDK installation in the Setup Dependencies stage
-   - Check if `JAVA_HOME` is properly set
-
-3. **SCA JAR Download Fails**:
-   - Verify `SCA_BOM_DETECT_DOWNLOAD_URL` is accessible
-   - Check network connectivity from Jenkins agent
-
-4. **DevSecOps Token Issues**:
-   - Ensure `DEVSECOPS_TOKEN` is properly configured
-   - Verify token has necessary permissions
-
-### Debug Mode
-
-Enable debug logging by modifying the SCA scan command:
-```bash
-java -jar "${SCA_PLUGIN_DIR}/${SCA_JAR_NAME}" -f "${WORKSPACE}" --debug -report json --verbose
-```
-
-## Integration with Other Tools
-
-### Slack Notifications
-Add Slack notifications to the `post` section:
-
-```groovy
-post {
-    success {
-        slackSend channel: '#security', 
-                  color: 'good', 
-                  message: "✅ SCA scan completed successfully for ${env.JOB_NAME}"
-    }
-    failure {
-        slackSend channel: '#security', 
-                  color: 'danger', 
-                  message: "❌ SCA scan failed for ${env.JOB_NAME}"
-    }
-}
-```
-
-### Email Notifications
-Configure email notifications:
-
-```groovy
-post {
-    always {
-        emailext (
-            subject: "SCA Scan Results: ${env.JOB_NAME} - ${env.BUILD_NUMBER}",
-            body: "SCA scan completed. Check attached reports for details.",
-            to: "${env.CHANGE_AUTHOR_EMAIL}",
-            attachmentsPattern: "${SCA_REPORT_DIR}/*.json"
-        )
-    }
-}
-```
-
-## Security Best Practices
-
-1. **Secure Credentials**: Store sensitive tokens in Jenkins Credential Store
-2. **Agent Isolation**: Use dedicated agents for security scanning
-3. **Report Access**: Restrict access to security reports based on user roles
-4. **Regular Updates**: Keep the SCA detector JAR updated regularly
-
-## Support
-
-For issues related to:
-- **Jenkins Pipeline**: Check Jenkins logs and pipeline syntax
-- **SCA Scanning**: Verify Scantist platform connectivity and token validity
-- **Template Customization**: Refer to Jenkins Pipeline documentation
+1. **Jar download fails** → Verify `SCA_BOM_DETECT_DOWNLOAD_URL` is correct and accessible from the agent
+2. **Java not found** → Ensure `openjdk-11-jre-headless` is installed or pre-baked into the agent
+3. **Token errors** → Make sure `DEVSECOPS_TOKEN` is valid and stored as a Jenkins **Secret text**
 
 ---
 
-**Note**: This template is designed to mirror the functionality of the GitLab CI `bom-sca-scan.yml` template, providing consistent security scanning across different CI/CD platforms.
+## Security Best Practices
+- **Never** hardcode URLs or tokens in the Jenkinsfile — always use the credentials store
+- Limit access to jobs and credentials to authorized users
+- Keep the detector JAR URL up to date for the latest security checks
+
+---
+
+This updated template removes manual environment variable setup from job configuration and ensures all sensitive data is loaded directly from Jenkins secrets at runtime.
