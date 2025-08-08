@@ -1,74 +1,80 @@
 # SCA Scan - TeamCity Template
 # =====================================
-#
-# Simple, modular SCA (Software Composition Analysis) scanning template
 # Uses sca-bom-detect.jar to scan dependencies for vulnerabilities
 #
 # USAGE:
 # ------
 # 1. Place this file in your project's .teamcity/ directory
-# 2. Configure the required parameters in TeamCity project settings:
-#    - SCA_BOM_DETECT_DOWNLOAD_URL
+# 2. Configure the required secrets in TeamCity project settings:
 #    - DEVSECOPS_TOKEN
-#    - DEVSECOPS_IMPORT_URL (optional)
-#    - ASYNC (optional, defaults to false)
-
-name: DevSecOps SCA Scan
-
+#    - DEVSECOPS_IMPORT_URL
 jobs:
-  bom-sca-scan:
-    runs-on: Linux-Medium
-    
-    env:
-      SCA_BOM_DETECT_JAR: "sca-bom-detect.jar"
-      SCA_JAR_NAME: "sca-bom-detect.jar"
-      SCA_PLUGIN_DIR: ".scantist"
-      SCA_REPORT_DIR: "devsecops_report"
-      ASYNC: "%ASYNC%"
-    
+  build:
+    runs-on: Ubuntu-24.04-Small
     steps:
       - type: script
-        name: Install Dependencies
         script-content: |
-          echo "📦 Installing required dependencies..."
+          # Install Node.js 18.x and Yarn
+          echo "Installing Node.js 18.x and latest Yarn..."
           apt-get update
-          apt-get install -y curl openjdk-11-jre-headless
-          echo "✅ Dependencies installed successfully"
-        docker-image: ubuntu:latest
-      
-      - type: script
-        name: Run SCA Scan
-        script-content: |
+          apt-get install -y curl wget gnupg ca-certificates
+          mkdir -p /etc/apt/keyrings
+          curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+          echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_18.x nodistro main" > /etc/apt/sources.list.d/nodesource.list
+          apt-get update
+          apt-get install -y nodejs
+          npm install -g yarn
+          
+          # Install Java for SCA scanning
+          echo "Installing Java 11..."
+          apt-get install -y openjdk-11-jdk
+          
+          # Verify installations
+          echo "Verifying installations:"
+          node --version
+          yarn --version
+          java -version
+          
+          # Build application
+          echo "Building application..."
+          yarn install --frozen-lockfile
+          yarn build
+          
+          # SCA scan
           echo "🔍 Starting Scantist SCA scan..."
           
-          # Validate DevSecOps token is provided
-          if [[ -z "%DEVSECOPS_TOKEN%" ]]; then
-            echo "[SCA ERROR] DEVSECOPS_TOKEN environment variable is required" >&2
-            exit 1
-          fi
+          # Set up environment variables
+          SCA_PLUGIN_DIR=".scantist"
+          SCA_REPORT_DIR="devsecops_report"
+          SCA_JAR_NAME="sca-bom-detect.jar"
+
+
+          # Download SCA detector (always download to ensure we have it)
+          echo "[SCA] Downloading SCA detector..."
+          mkdir -p "${SCA_PLUGIN_DIR}"
+          curl -L "https://download.scantist.io/sca-bom-detect.jar" -o "${SCA_PLUGIN_DIR}/${SCA_JAR_NAME}"
+          echo "[SCA] Download completed"
           
-          # Download SCA detector if not exists
-          if [[ ! -f "${SCA_PLUGIN_DIR}/${SCA_JAR_NAME}" ]]; then
-            echo "[SCA] Downloading SCA detector..."
-            mkdir -p "${SCA_PLUGIN_DIR}"
-            curl -L -o "${SCA_PLUGIN_DIR}/${SCA_JAR_NAME}" "%SCA_BOM_DETECT_DOWNLOAD_URL%"
-            echo "[SCA] Download completed"
-          fi
+          # Verify download
+          echo "[SCA] Verifying download..."
+          ls -la "${SCA_PLUGIN_DIR}/"
           
           # Create report directory
           mkdir -p "${SCA_REPORT_DIR}"
           
           # Run SCA scan with DevSecOps integration
           echo "[SCA] Starting scan on: %teamcity.build.checkoutDir%"
+
           echo "[SCA] DevSecOps integration enabled"
           
+          # Use secrets configured at job level
           env DEVSECOPS_TOKEN="%DEVSECOPS_TOKEN%" \
               DEVSECOPS_IMPORT_URL="%DEVSECOPS_IMPORT_URL%" \
               java -jar "${SCA_PLUGIN_DIR}/${SCA_JAR_NAME}" -f "%teamcity.build.checkoutDir%" --debug -report json
           
           echo "[SCA] Scan completed. Reports in: ${SCA_REPORT_DIR}"
-        docker-image: ubuntu:latest
-    
-    artifacts:
-      paths:
-        - "%SCA_REPORT_DIR%/**" => sca-reports.zip
+          ls -lah ${SCA_REPORT_DIR}
+        docker-image: ubuntu:22.04
+secrets:
+  DEVSECOPS_TOKEN: credentialsJSON:72f8fac4-dd5e-4d7a-aba7-6784a1b85f03
+  DEVSECOPS_IMPORT_URL: credentialsJSON:6ef246d2-7bf1-44e8-bd8b-1f0de7d4caa1
