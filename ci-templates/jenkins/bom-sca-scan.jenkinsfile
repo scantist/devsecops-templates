@@ -1,39 +1,49 @@
 // scaScan.groovy
-// Simple SCA scan step that loads all required vars from Jenkins credentials
+// Simple, reusable SCA scan step that loads all required vars from Jenkins credentials.
+// Designed to be imported via `load` in another Jenkinsfile.
 
-def scaScan(String jarName = 'sca-bom-detect.jar', String pluginDir = '.scantist', String reportDir = 'devsecops_report') {
-  withCredentials([
-    string(credentialsId: 'SCA_BOM_DETECT_DOWNLOAD_URL', variable: 'SCA_BOM_DETECT_DOWNLOAD_URL'),
-    string(credentialsId: 'DEVSECOPS_IMPORT_URL',        variable: 'DEVSECOPS_IMPORT_URL'),
-    string(credentialsId: 'DEVSECOPS_TOKEN',             variable: 'DEVSECOPS_TOKEN')
-  ]) {
-    sh """
-      set -e
+def scaScan(String jarName = 'sca-bom-detect.jar',
+            String pluginDir = '.scantist',
+            String reportDir = 'devsecops_report') {
 
-      # Install basic dependencies (Debian/Ubuntu only)
-      if command -v apt-get >/dev/null 2>&1; then
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update -y >/dev/null 2>&1 || true
-        apt-get install -y curl ca-certificates openjdk-11-jre-headless >/dev/null 2>&1 || true
-      fi
+    withCredentials([
+        string(credentialsId: 'SCA_BOM_DETECT_DOWNLOAD_URL', variable: 'SCA_BOM_DETECT_DOWNLOAD_URL'),
+        string(credentialsId: 'DEVSECOPS_IMPORT_URL',        variable: 'DEVSECOPS_IMPORT_URL'),
+        string(credentialsId: 'DEVSECOPS_TOKEN',             variable: 'DEVSECOPS_TOKEN')
+    ]) {
 
-      mkdir -p '${pluginDir}' '${reportDir}'
+        sh """
+            set -e
 
-      # Download detector jar
-      if [ ! -f '${pluginDir}/${jarName}' ]; then
-        echo '[SCA] Downloading detector…'
-        curl -fsSL "$SCA_BOM_DETECT_DOWNLOAD_URL" -o '${pluginDir}/${jarName}'
-      fi
+            # Install basic dependencies (Debian/Ubuntu only)
+            if command -v apt-get >/dev/null 2>&1; then
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update -y >/dev/null 2>&1 || true
+              apt-get install -y curl ca-certificates openjdk-11-jre-headless >/dev/null 2>&1 || true
+            fi
 
-      echo '[SCA] Running scan on workspace: $WORKSPACE'
-      export DEVSECOPS_TOKEN="$DEVSECOPS_TOKEN"
-      export DEVSECOPS_IMPORT_URL="$DEVSECOPS_IMPORT_URL"
+            mkdir -p '${pluginDir}' '${reportDir}'
 
-      java -jar '${pluginDir}/${jarName}' -f "$WORKSPACE" -report json -o '${reportDir}' --debug
+            # Download detector jar if missing
+            if [ ! -f '${pluginDir}/${jarName}' ]; then
+              echo '[SCA] Downloading detector…'
+              curl -fsSL "$SCA_BOM_DETECT_DOWNLOAD_URL" -o '${pluginDir}/${jarName}'
+            fi
 
-      echo '[SCA] Scan done. Reports at: ${reportDir}'
-    """
+            echo '[SCA] Running scan on workspace: $WORKSPACE'
 
-    archiveArtifacts artifacts: "${reportDir}/**", allowEmptyArchive: true, fingerprint: true
-  }
+            java -jar '${pluginDir}/${jarName}' \
+              -f "$WORKSPACE" \
+              -report json \
+              -o '${reportDir}' \
+              --debug
+
+            echo '[SCA] Scan done. Reports at: ${reportDir}'
+        """
+
+        archiveArtifacts artifacts: "${reportDir}/**", allowEmptyArchive: true, fingerprint: true
+    }
 }
+
+// Ensure this file returns its binding so that `load` works
+return this
