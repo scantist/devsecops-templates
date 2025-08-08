@@ -4,6 +4,8 @@
 
 def scaScan(String jarName = 'sca-bom-detect.jar',
             String pluginDir = '.scantist') {
+    
+    String reportDir = 'devsecops_report'
 
     withCredentials([
         string(credentialsId: 'SCA_BOM_DETECT_DOWNLOAD_URL', variable: 'SCA_BOM_DETECT_DOWNLOAD_URL'),
