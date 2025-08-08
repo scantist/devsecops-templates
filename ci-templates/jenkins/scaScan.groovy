@@ -3,8 +3,7 @@
 // Designed to be imported via `load` in another Jenkinsfile.
 
 def scaScan(String jarName = 'sca-bom-detect.jar',
-            String pluginDir = '.scantist',
-            String reportDir = 'devsecops_report') {
+            String pluginDir = '.scantist') {
 
     withCredentials([
         string(credentialsId: 'SCA_BOM_DETECT_DOWNLOAD_URL', variable: 'SCA_BOM_DETECT_DOWNLOAD_URL'),
@@ -35,7 +34,6 @@ def scaScan(String jarName = 'sca-bom-detect.jar',
             java -jar '${pluginDir}/${jarName}' \
               -f "$WORKSPACE" \
               -report json \
-              -o '${reportDir}' \
               --debug
 
             echo '[SCA] Scan done. Reports at: ${reportDir}'
