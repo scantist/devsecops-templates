@@ -40,16 +40,16 @@ All required configuration values are securely loaded from Jenkins **Credentials
 ### 2. Call the Template in Your Pipeline
 In your `Jenkinsfile`, after your build stage:
 
-\`\`\`groovy
+```groovy
 stage('SCA Scan') {
   steps {
     script {
-      evaluate(new URL('https://raw.githubusercontent.com/<user>/<repo>/<branch>/scaScan.groovy').text)
-      scaScan() // Runs with all secrets loaded from Jenkins credentials
+      evaluate(new URL('https://raw.githubusercontent.com/scantist/devsecops-templates/main/ci-templates/jenkins/bom-sca-scan.jenkinsfile').text)
+      scaScan() // Runs with all secrets loaded from Jenkins credentials 
     }
   }
 }
-\`\`\`
+```
 
 ---
 
