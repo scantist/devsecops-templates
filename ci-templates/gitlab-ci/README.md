@@ -35,3 +35,15 @@ Minimal GitLab CI template for BOM (Bill of Materials) SCA scanning using Scanti
 - Generates reports in `devsecops_report/` folder
 - Integrates with GitLab Security Dashboard
 
+
+## Local GitLab Installation
+
+### Prerequisites
+
+- Docker
+
+### Usage
+
+```bash
+./gitlab-ci-locally.sh
+```

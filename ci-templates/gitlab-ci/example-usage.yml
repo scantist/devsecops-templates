@@ -7,6 +7,6 @@ stages:
   - test
 
 variables:
-  SCA_BOM_DETECT_DOWNLOAD_URL: "https://download.scantist.io/sca-bom-detect.jar"
+  SCA_BOM_DETECT_DOWNLOAD_URL: "http://localhost:8237/sca-bom-detect.jar"
   DEVSECOPS_TOKEN: "${DEVSECOPS_TOKEN}"
   DEVSECOPS_IMPORT_URL: "${DEVSECOPS_IMPORT_URL}"
