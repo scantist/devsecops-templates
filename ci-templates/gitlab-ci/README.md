@@ -41,9 +41,16 @@ Minimal GitLab CI template for BOM (Bill of Materials) SCA scanning using Scanti
 ### Prerequisites
 
 - Docker
+- User in docker group
 
 ### Usage
 
+Run these 3 scripts in the `local-install-docker-ce/` directory:
+
 ```bash
+cd local-install-docker-ce/
+./install-gitlab-locally.sh
 ./gitlab-ci-locally.sh
+./gitlab-ci-runner-locally.sh
 ```
+Remember to change the hardcoded IP (192.168.0.173) in the scripts to your own.

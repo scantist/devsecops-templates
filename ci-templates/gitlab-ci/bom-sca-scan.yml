@@ -45,6 +45,7 @@ bom-sca-scan:
     - apt-get install -y curl openjdk-11-jre-headless
     - echo "✅ Dependencies installed successfully"
 
+  # The override_report_url is used to use local onprem SCA server, otherwise it will use the default DevSecOps SCA server
   script: |
     echo "🔍 Starting Scantist SCA scan..."
     # Validate DevSecOps token is provided
@@ -66,7 +67,7 @@ bom-sca-scan:
     echo "[SCA] DevSecOps integration enabled"
     env DEVSECOPS_TOKEN="${DEVSECOPS_TOKEN}" \
         ${DEVSECOPS_IMPORT_URL:+DEVSECOPS_IMPORT_URL="${DEVSECOPS_IMPORT_URL}"} \
-        java -jar "${SCA_PLUGIN_DIR}/${SCA_JAR_NAME}" -f "${CI_PROJECT_DIR}" --debug -report json
+        java -jar "${SCA_PLUGIN_DIR}/${SCA_JAR_NAME}" -f "${CI_PROJECT_DIR}" -override_report_url --debug -report json
     echo "[SCA] Scan completed. Reports in: ${SCA_REPORT_DIR}"
   artifacts:
     when: always
