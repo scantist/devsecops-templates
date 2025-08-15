@@ -36,7 +36,7 @@ bom-sca-scan:
   
   variables:
     SCA_JAR_NAME: "sca-bom-detect.jar"
-    SCA_PLUGIN_DIR: ".scantist"
+    SCA_PLUGIN_DIR: ".sca"
     SCA_REPORT_DIR: "devsecops_report"
 
   before_script:
@@ -47,7 +47,7 @@ bom-sca-scan:
 
   # The override_report_url is used to use local onprem SCA server, otherwise it will use the default DevSecOps SCA server
   script: |
-    echo "🔍 Starting Scantist SCA scan..."
+    echo "🔍 Starting SCA Scan..."
     # Validate DevSecOps token is provided
     if [[ -z "${DEVSECOPS_TOKEN:-}" ]]; then
       echo "[SCA ERROR] DEVSECOPS_TOKEN environment variable is required" >&2
