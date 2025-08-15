@@ -3,7 +3,7 @@
 // Designed to be imported via `load` in another Jenkinsfile.
 
 def scaScan(String jarName = 'sca-bom-detect.jar',
-            String pluginDir = '.scantist',
+            String pluginDir = '.sca',
             String reportDir = 'devsecops_report') {
 
     withCredentials([

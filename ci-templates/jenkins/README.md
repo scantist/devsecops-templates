@@ -25,7 +25,7 @@ All required configuration values are securely loaded from Jenkins **Credentials
 
    | ID                               | Example Value |
    |----------------------------------|---------------|
-   | `SCA_BOM_DETECT_DOWNLOAD_URL`    | https://download.scantist.io/sca-bom-detect.jar |
+   | `SCA_BOM_DETECT_DOWNLOAD_URL`    | https://sca_server:8237/sca-bom-detect.jar |
    | `DEVSECOPS_IMPORT_URL`           | https://my-import-endpoint |
    | `DEVSECOPS_TOKEN`                | your_api_token |
 
