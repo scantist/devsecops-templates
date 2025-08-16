@@ -7,7 +7,7 @@ set -e
 
 JENKINS_HOME_DIR="$HOME/jenkins_home"
 CONTAINER_NAME="jenkins-local"
-JENKINS_PORT="8080"
+JENKINS_PORT="8888"
 
 echo "Starting Jenkins with Docker..."
 
@@ -46,7 +46,3 @@ else
     echo "Jenkins is still starting up. Check the password later with:"
     echo "docker exec $CONTAINER_NAME cat /var/jenkins_home/secrets/initialAdminPassword"
 fi
-
-
-
-cd87e585e08c4300b3d136f5a8049e01

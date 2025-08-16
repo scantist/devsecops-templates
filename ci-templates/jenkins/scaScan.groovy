@@ -35,6 +35,7 @@ def scaScan(String jarName = 'sca-bom-detect.jar',
             java -jar '${pluginDir}/${jarName}' \
               -f "$WORKSPACE" \
               -report json \
+              -override_report_url \
               --debug
 
             echo '[SCA] Scan done. Reports at: ${reportDir}'
