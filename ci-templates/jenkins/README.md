@@ -1,6 +1,6 @@
-# Jenkins Pipeline Templates for Scantist Security Scanning
+# Jenkins Pipeline Templates for SCA Security Scanning
 
-This directory contains Jenkins pipeline templates for integrating Scantist security scanning into your CI/CD workflows.
+This directory contains Jenkins pipeline templates for integrating SCA security scanning into your CI/CD workflows.
 
 ## Available Templates
 
@@ -25,7 +25,7 @@ All required configuration values are securely loaded from Jenkins **Credentials
 
    | ID                               | Example Value |
    |----------------------------------|---------------|
-   | `SCA_BOM_DETECT_DOWNLOAD_URL`    | https://download.scantist.io/sca-bom-detect.jar |
+   | `SCA_BOM_DETECT_DOWNLOAD_URL`    | https://sca_server:8237/sca-bom-detect.jar |
    | `DEVSECOPS_IMPORT_URL`           | https://my-import-endpoint |
    | `DEVSECOPS_TOKEN`                | your_api_token |
 
@@ -41,14 +41,19 @@ All required configuration values are securely loaded from Jenkins **Credentials
 In your `Jenkinsfile`, after your build stage:
 
 ```groovy
-stage('SCA Scan') {
-  steps {
-    script {
-      evaluate(new URL('https://github.com/scantist/devsecops-templates/blob/main/ci-templates/jenkins/bom-sca-scan.jenkinsfile').text)
-      scaScan() // Runs with all secrets loaded from Jenkins credentials 
+// SCA Scan
+    stage('SCA Scan') {
+      steps {
+        script {
+          // curl -fsSL https://<repo_url>:8237/ci-templates/jenkins/scaScan.groovy -o scaScan.groovy
+          sh '''
+            curl -fsSL http://192.168.0.145:8237/ci-templates/jenkins/scaScan.groovy -o scaScan.groovy
+          '''
+          def sca = load 'scaScan.groovy'
+          sca.scaScan()
+        }
+      }
     }
-  }
-}
 ```
 
 ---
